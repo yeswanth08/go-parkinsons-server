@@ -1,0 +1,39 @@
+openapi: 3.0.0
+info: 
+  title: Parkinsons-Risk-Screening-System
+  version: 1.0.0
+
+paths:
+  /api/v1/detect:
+    post:
+      summary: Detect Parkinsons from audio
+      description: Send raw PCM audio as chunked transfer encoding, get detection result
+      requestBody:
+        required: true
+        content:
+          application/octet-stream:
+            schema:
+              type: string
+              format: binary
+      responses:
+        '200':
+          description: Detection result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ParkinsonsResponse'
+        '500':
+          description: Internal error
+
+components:
+  schemas:
+    ParkinsonsResponse:
+      type: object
+      properties:
+        isHavingParkinsons:
+          type: boolean
+        severity:
+          type: number
+          format: float
+        suggestion:
+          type: string
