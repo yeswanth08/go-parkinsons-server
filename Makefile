@@ -19,6 +19,9 @@ gen_parkinsons_stubs:
 	--go-grpc_out=$(STUBS_GEN_DIR) --go-grpc_opt=paths=source_relative \
 	$(PARKINSONS_PROTO_FILE)
 
+server_gen:
+	mkdir -p internal/api/gen 
+	cd open-api && oapi-codegen -config oapi-config.yaml openapi.yaml
 
 clean_stubs:
 	rm -rf $(STUBS_GEN_DIR)
