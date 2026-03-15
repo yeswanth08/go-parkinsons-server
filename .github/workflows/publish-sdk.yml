@@ -4,8 +4,8 @@ on:
   push:
     branches:
       - main
-    paths:
-      - 'open-api/openapi.yaml' 
+    # paths:
+    #   - 'open-api/openapi.yaml' 
 
 jobs:
   publish:
@@ -27,10 +27,13 @@ jobs:
         run: npm install -g openapi-typescript-codegen
 
       - name: Generate SDK
-        run: make gen_sdk
+        run: make sdk_gen
 
       - name: Install & Build
         run: cd sdk && npm install && npx tsc --declaration --emitDeclarationOnly || true
+
+      - name: Bump version
+        run: cd sdk && npm version patch --no-git-tag-version
 
       - name: Publish
         run: cd sdk && npm publish

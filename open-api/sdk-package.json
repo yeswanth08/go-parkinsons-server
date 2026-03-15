@@ -4,6 +4,10 @@
   "description": "Parkinsons SDK",
   "main": "index.js",
   "types": "index.d.ts",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/yeswanth08/go-parkinsons-server.git"
+  },
   "publishConfig": {
     "registry": "https://npm.pkg.github.com"
   }
