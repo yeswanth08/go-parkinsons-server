@@ -4,7 +4,6 @@ go 1.25.6
 
 require (
 	github.com/getkin/kin-openapi v0.134.0
-	github.com/go-chi/chi/v5 v5.2.5
 	github.com/labstack/echo/v4 v4.15.1
 	google.golang.org/grpc v1.70.0
 	google.golang.org/grpc/cmd/protoc-gen-go-grpc v1.6.1
@@ -33,6 +32,7 @@ require (
 	golang.org/x/net v0.48.0 // indirect
 	golang.org/x/sys v0.39.0 // indirect
 	golang.org/x/text v0.32.0 // indirect
+	golang.org/x/time v0.14.0 // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20250115164207-1a7da9e5054f // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
