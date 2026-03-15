@@ -2,7 +2,7 @@ name: publish parkinsons sdk
 
 on:
   push:
-    branchs:
+    branches:
       - main
     paths:
       - 'open-api/openapi.yaml' 
