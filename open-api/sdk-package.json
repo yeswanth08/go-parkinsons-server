@@ -1,0 +1,10 @@
+{
+  "name": "@yeswanth/parkinsons-internal",
+  "version": "1.0.0",
+  "description": "Parkinsons SDK",
+  "main": "index.js",
+  "types": "index.d.ts",
+  "publishConfig": {
+    "registry": "https://npm.pkg.github.com"
+  }
+}
