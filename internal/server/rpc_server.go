@@ -26,13 +26,25 @@ func NewRPCHandler(grpcAddr string) (*RPCHandler, error) {
 	return &RPCHandler{client: stub.NewAudioStreamingClient(conn)}, nil
 }
 
-func (h *RPCHandler) PostApiV1Detect(c echo.Context) error {
+func (h *RPCHandler) PostApiV1Detect(c echo.Context, params api.PostApiV1DetectParams) error {
 	ctx, cancel := context.WithTimeout(c.Request().Context(), 30*time.Second)
 	defer cancel()
+
+	age := params.Age
+	sex := params.Sex
 
 	stream, err := h.client.DetectParkinsonsFromAudio(ctx)
 	if err != nil {
 		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "stream init failed"})
+	}
+
+	// send metadata as first chunk
+	if err := stream.Send(&stub.AudioChunks{
+		IsMetadata: true,
+		Age:        int32(age),
+		Sex:        int32(sex),
+	}); err != nil {
+		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "metadata send failed"})
 	}
 
 	queue := make([]byte, 0, 640*100)
@@ -86,10 +98,12 @@ func (h *RPCHandler) PostApiV1Detect(c echo.Context) error {
 	isHaving := resp.IsHavingParkinsons
 	severity  := resp.Severity
 	suggestion := resp.Suggestion
+	voiceFeatures := resp.ExtractedVoiceFeatures.AsMap()
 
 	return c.JSON(http.StatusOK, api.ParkinsonsResponse{
 		IsHavingParkinsons: &isHaving,
 		Severity:           &severity,
 		Suggestion:         &suggestion,
+		ExtracedVoiceFeatures: &voiceFeatures,
 	})
 }

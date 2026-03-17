@@ -20,6 +20,11 @@ func main() {
 	e.HideBanner = true
 	e.Use(middleware.Logger())
 	e.Use(middleware.Recover())
+	e.Use(middleware.CORSWithConfig(middleware.CORSConfig{
+        AllowOrigins: []string{"http://localhost:3000"},
+        AllowMethods: []string{"POST"},
+        AllowHeaders: []string{"Content-Type"},
+    }))
 
 	api.RegisterHandlers(e, handler)
 

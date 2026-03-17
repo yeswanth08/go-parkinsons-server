@@ -36,3 +36,6 @@ sdk_gen:
 
 clean_stubs:
 	rm -rf $(STUBS_GEN_DIR)
+
+clean_sdk:
+	rm -rf $(SDK_OUT_DIR)

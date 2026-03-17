@@ -15,22 +15,58 @@ import (
 )
 
 func TestMain(m *testing.M) {
-	// let's stream the basic raw audio file to python service using rpc and get result
-	// go-lang will be the client service to get the reponse from the python -server
-	// conn, err :=  grpc.NewClient("localhost:50051")
+	os.Exit(m.Run())
+}
 
-	//  syntax depricated but will be revamp later :(
-
+func TestDetectParkinsons(t *testing.T) {
 	conn, err := grpc.Dial("localhost:50051", grpc.WithInsecure())
 	if err != nil {
 		log.Fatalf("failed to connect the py-rpc server %v", err)
 	}
 	defer conn.Close()
-	
-	// crete a client for the service
+
 	client := stub.NewAudioStreamingClient(conn)
-	
-	// getting the ctx with background ctx
+
+	tests := []struct {
+		name     string
+		audioFile string
+		age      int32
+		sex      int32
+		wantParkinsons bool
+	}{
+		{
+			name:           "healthy sample",
+			audioFile:      "./healthy/temp.wav",
+			age:            65,
+			sex:            0,
+			wantParkinsons: false,
+		},
+		{
+			name:           "parkinsons sample",
+			audioFile:      "./parkinsons/temp.wav",
+			age:            65,
+			sex:            0,
+			wantParkinsons: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := streamAudioFile(t, client, tt.audioFile, tt.age, tt.sex)
+			fmt.Printf("[%s] isHavingParkinsons=%v severity=%.4f\n",
+				tt.name, result.IsHavingParkinsons, result.Severity)
+
+			if result.IsHavingParkinsons != tt.wantParkinsons {
+				t.Errorf("expected isHavingParkinsons=%v got=%v",
+					tt.wantParkinsons, result.IsHavingParkinsons)
+			}
+		})
+	}
+}
+
+func streamAudioFile(t *testing.T, client stub.AudioStreamingClient, filePath string, age, sex int32) *stub.ParkinsonsDetectionResult {
+	t.Helper()
+
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
@@ -39,67 +75,55 @@ func TestMain(m *testing.M) {
 	stream, err := client.DetectParkinsonsFromAudio(ctx)
 
 	if err != nil {
-		log.Fatal(err)
+		t.Fatalf("stream init failed: %v", err)
 	}
 
-	//  this is not ideal streaming of the audio chunks i.e we are streaming with one chunk
-	// audioFile, err := os.ReadFile("./healthy/temp.wav")
-
-	// imp using audio stream by chunk fragmentation
-	// fileStats, statErr := os.Stat("./healthy/temp.wav")
-	audioFile, ioErr := os.Open("./parkinsons/temp.wav")
-
-	// if statErr != nil {
-	// 	fmt.Print("error in opening the audio file")
-	// 	return
-	// }
-
-	if ioErr != nil {
-		// fmt.Print("error in opening the audio file")
-		// return
-		// insted of this we can simply use the print err + os.exit = fatal
-		log.Fatal(err)
+	// send metadata as first chunk
+	if err := stream.Send(&stub.AudioChunks{
+		IsMetadata: true,
+		Age:        age,
+		Sex:        sex,
+	}); err != nil {
+		t.Fatalf("metadata send failed: %v", err)
 	}
-	
-	defer audioFile.Close()
 
-	// skipping the wav header
-	_, err = audioFile.Seek(44, io.SeekStart)
+	// open and stream wav file
+	f, err := os.Open(filePath)
 	if err != nil {
-		log.Fatal(err)
+		t.Fatalf("failed to open audio file: %v", err)
+	}
+	defer f.Close()
+
+	// skip WAV header
+	if _, err := f.Seek(44, io.SeekStart); err != nil {
+		t.Fatalf("failed to seek past wav header: %v", err)
 	}
 
-	audioBuffer := make([]byte, 640) 
-	// ideal chunk size 
-	chunkId := int32(1);
+	buf := make([]byte, 640)
+	chunkId := int32(1)
 
 	for {
-		audioChunk, err := audioFile.Read(audioBuffer)
+		n, err := f.Read(buf)
 		if err == io.EOF {
-			// if we reached the end of the file
-			break; 
+			break
 		}
 		if err != nil {
-			// print + os.exit
-			log.Fatal(err)
+			t.Fatalf("read failed at chunk %d: %v", chunkId, err)
 		}
-
-		// now we created a stream now from that stream send the chunks
-		err = stream.Send(&stub.AudioChunks{
-			RawAudioChunk: audioBuffer[:audioChunk],
+		if sendErr := stream.Send(&stub.AudioChunks{
+			RawAudioChunk: buf[:n],
 			ChunkId:       chunkId,
-		})
-		if err != nil {
-			log.Fatal(err)
+		}); sendErr != nil {
+			t.Fatalf("send failed at chunk %d: %v", chunkId, sendErr)
 		}
-		chunkId++;
+		chunkId++
 	}
 
-	// close the stream and get the response
 	resp, err := stream.CloseAndRecv()
 	if err != nil {
-		log.Fatalf("cannot get request %v", err)
+		t.Fatalf("recv failed: %v", err)
 	}
 
-	fmt.Printf("resp %v", resp.IsHavingParkinsons)
+	log.Printf("chunks sent: %d", chunkId-1)
+	return resp
 }

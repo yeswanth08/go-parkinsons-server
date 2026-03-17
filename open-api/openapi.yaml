@@ -7,7 +7,19 @@ paths:
   /api/v1/detect:
     post:
       summary: Detect Parkinsons from audio
-      description: Send raw PCM audio as chunked transfer encoding, get detection result
+      description: Send raw WAV audio as chunked transfer encoding, get detection result
+      parameters:
+        - name: age
+          in: query
+          required: true
+          schema:
+            type: integer
+        - name: sex
+          in: query
+          required: true
+          schema:
+            type: integer
+            enum: [0, 1]
       requestBody:
         required: true
         content:
@@ -37,3 +49,5 @@ components:
           format: float
         suggestion:
           type: string
+        extracedVoiceFeatures:
+          type: object
