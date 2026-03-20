@@ -3,7 +3,7 @@ package main
 import (
 	"log"
 
-	api "go-parkinsons-server/internal/api/gen"
+	api         "go-parkinsons-server/internal/api/gen"
 	internalapi "go-parkinsons-server/internal/server"
 
 	"github.com/labstack/echo/v4"
@@ -21,12 +21,13 @@ func main() {
 	e.Use(middleware.Logger())
 	e.Use(middleware.Recover())
 	e.Use(middleware.CORSWithConfig(middleware.CORSConfig{
-        AllowOrigins: []string{"http://localhost:3000"},
-        AllowMethods: []string{"POST"},
-        AllowHeaders: []string{"Content-Type"},
-    }))
+		AllowOrigins: []string{"http://localhost:3000"},
+		AllowMethods: []string{"GET", "POST", "OPTIONS"},
+		AllowHeaders: []string{"Content-Type", "Upgrade", "Connection"},
+	}))
 
 	api.RegisterHandlers(e, handler)
 
+	log.Println("server listening on :8080")
 	log.Fatal(e.Start(":8080"))
 }

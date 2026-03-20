@@ -1,13 +1,13 @@
 openapi: 3.0.0
-info: 
+info:
   title: Parkinsons-Risk-Screening-System
-  version: 1.1.0
+  version: 2.0.0
 
 paths:
-  /api/v1/detect:
-    post:
-      summary: Detect Parkinsons from audio
-      description: Send raw WAV audio as chunked transfer encoding, get detection result
+  /api/v1/detect/ws:
+    get:
+      operationId: DetectWs
+      summary: Detect Parkinsons via WebSocket audio stream
       parameters:
         - name: age
           in: query
@@ -20,16 +20,11 @@ paths:
           schema:
             type: integer
             enum: [0, 1]
-      requestBody:
-        required: true
-        content:
-          application/octet-stream:
-            schema:
-              type: string
-              format: binary
       responses:
+        '101':
+          description: Switching Protocols — WebSocket upgrade
         '200':
-          description: Detection result
+          description: Analysis result (returned as WS text frame)
           content:
             application/json:
               schema:
@@ -49,5 +44,5 @@ components:
           format: float
         suggestion:
           type: string
-        extracedVoiceFeatures:
+        extractedVoiceFeatures:
           type: object

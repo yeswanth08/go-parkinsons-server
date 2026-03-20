@@ -2,17 +2,22 @@ package internalapi
 
 import (
 	"context"
-	"io"
+	"encoding/json"
 	"log"
 	"net/http"
 	"time"
 
-	api "go-parkinsons-server/internal/api/gen"
+	api  "go-parkinsons-server/internal/api/gen"
 	stub "go-parkinsons-server/gen-stubs"
 
+	"github.com/gorilla/websocket"
 	"github.com/labstack/echo/v4"
 	"google.golang.org/grpc"
 )
+
+var upgrader = websocket.Upgrader{
+	CheckOrigin: func(r *http.Request) bool { return true },
+}
 
 type RPCHandler struct {
 	client stub.AudioStreamingClient
@@ -26,84 +31,114 @@ func NewRPCHandler(grpcAddr string) (*RPCHandler, error) {
 	return &RPCHandler{client: stub.NewAudioStreamingClient(conn)}, nil
 }
 
-func (h *RPCHandler) PostApiV1Detect(c echo.Context, params api.PostApiV1DetectParams) error {
-	ctx, cancel := context.WithTimeout(c.Request().Context(), 30*time.Second)
-	defer cancel()
-
+func (h *RPCHandler) DetectWs(c echo.Context, params api.DetectWsParams) error {
 	age := params.Age
 	sex := params.Sex
+	log.Printf("[WS] new connection age=%d sex=%d", age, sex)
+
+	conn, err := upgrader.Upgrade(c.Response(), c.Request(), nil)
+	if err != nil {
+		log.Printf("[WS] upgrade failed: %v", err)
+		return err
+	}
+	defer conn.Close()
+
+	ctx, cancel := context.WithTimeout(c.Request().Context(), 60*time.Second)
+	defer cancel()
 
 	stream, err := h.client.DetectParkinsonsFromAudio(ctx)
 	if err != nil {
-		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "stream init failed"})
+		log.Printf("[gRPC] stream init failed: %v", err)
+		conn.WriteJSON(map[string]string{"error": "grpc stream init failed"})
+		return err
 	}
 
-	// send metadata as first chunk
 	if err := stream.Send(&stub.AudioChunks{
 		IsMetadata: true,
 		Age:        int32(age),
 		Sex:        int32(sex),
 	}); err != nil {
-		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "metadata send failed"})
+		log.Printf("[gRPC] metadata send failed: %v", err)
+		conn.WriteJSON(map[string]string{"error": "grpc metadata send failed"})
+		return err
 	}
+	log.Printf("[gRPC] metadata sent")
 
-	queue := make([]byte, 0, 640*100)
-	tmp := make([]byte, 4096)
-	chunkId := int32(1)
+	accumulator := make([]byte, 0, 1280)
+	chunkID     := int32(1)
+	totalBytes  := 0
 
 	for {
-		n, readErr := c.Request().Body.Read(tmp)
-		if n > 0 {
-			queue = append(queue, tmp[:n]...)
-			for len(queue) >= 640 {
-				if sendErr := stream.Send(&stub.AudioChunks{
-					RawAudioChunk: queue[:640],
-					ChunkId:       chunkId,
-				}); sendErr != nil {
-					log.Printf("grpc send failed chunk %d: %v", chunkId, sendErr)
-				    if closeErr := stream.CloseSend(); closeErr != nil {
-        				log.Printf("grpc close send failed: %v", closeErr)
-    				}
-					return c.JSON(http.StatusInternalServerError, map[string]string{"error": "stream send failed"})
-				}
-				queue = queue[640:]
-				chunkId++
+		msgType, msg, err := conn.ReadMessage()
+		if err != nil {
+			if websocket.IsCloseError(err,
+				websocket.CloseNormalClosure,
+				websocket.CloseGoingAway) {
+				log.Printf("[WS] normal close, total=%d bytes", totalBytes)
+			} else {
+				log.Printf("[WS] read error: %v", err)
 			}
-		}
-
-		if readErr == io.EOF {
 			break
 		}
-		if readErr != nil {
-			if closeErr := stream.CloseSend(); closeErr != nil {
-        		log.Printf("grpc close send failed: %v", closeErr)
-    		}
-			return c.JSON(http.StatusInternalServerError, map[string]string{"error": "body read failed"})
+
+		if msgType == websocket.TextMessage {
+			var ctrl map[string]string
+			if json.Unmarshal(msg, &ctrl) == nil && ctrl["type"] == "done" {
+				log.Printf("[WS] done sentinel received, total=%d bytes", totalBytes)
+				break
+			}
+			continue
+		}
+
+		totalBytes += len(msg)
+		accumulator = append(accumulator, msg...)
+		log.Printf("[WS] recv %d bytes (total=%d)", len(msg), totalBytes)
+
+		for len(accumulator) >= 640 {
+			if sendErr := stream.Send(&stub.AudioChunks{
+				RawAudioChunk: accumulator[:640],
+				ChunkId:       chunkID,
+			}); sendErr != nil {
+				log.Printf("[gRPC] send failed chunk=%d: %v", chunkID, sendErr)
+				stream.CloseSend()
+				conn.WriteJSON(map[string]string{"error": "grpc send failed"})
+				return sendErr
+			}
+			accumulator = accumulator[640:]
+			chunkID++
 		}
 	}
 
-	// flush remaining bytes as final partial chunk
-	if len(queue) > 0 {
-		if closeErr := stream.CloseSend(); closeErr != nil {
-        	log.Printf("grpc close send failed: %v", closeErr)
-    	}
-		stream.Send(&stub.AudioChunks{RawAudioChunk: queue, ChunkId: chunkId})
+	if len(accumulator) > 0 {
+		if sendErr := stream.Send(&stub.AudioChunks{
+			RawAudioChunk: accumulator,
+			ChunkId:       chunkID,
+		}); sendErr != nil {
+			log.Printf("[gRPC] tail flush failed: %v", sendErr)
+		} else {
+			log.Printf("[gRPC] flushed %d tail bytes", len(accumulator))
+		}
 	}
 
+	log.Printf("[gRPC] waiting for response…")
 	resp, err := stream.CloseAndRecv()
 	if err != nil {
-		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "grpc recv failed"})
+		log.Printf("[gRPC] recv failed: %v", err)
+		conn.WriteJSON(map[string]string{"error": "grpc recv failed"})
+		return err
+	}
+	log.Printf("[gRPC] result isHavingParkinsons=%v severity=%.3f",
+		resp.IsHavingParkinsons, resp.Severity)
+
+	var voiceFeatures map[string]interface{}
+	if resp.ExtractedVoiceFeatures != nil {
+		voiceFeatures = resp.ExtractedVoiceFeatures.AsMap()
 	}
 
-	isHaving := resp.IsHavingParkinsons
-	severity  := resp.Severity
-	suggestion := resp.Suggestion
-	voiceFeatures := resp.ExtractedVoiceFeatures.AsMap()
-
-	return c.JSON(http.StatusOK, api.ParkinsonsResponse{
-		IsHavingParkinsons: &isHaving,
-		Severity:           &severity,
-		Suggestion:         &suggestion,
-		ExtracedVoiceFeatures: &voiceFeatures,
+	return conn.WriteJSON(map[string]interface{}{
+		"isHavingParkinsons":     resp.IsHavingParkinsons,
+		"severity":               resp.Severity,
+		"suggestion":             resp.Suggestion,
+		"extractedVoiceFeatures": voiceFeatures,
 	})
 }
