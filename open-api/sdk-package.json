@@ -1,6 +1,6 @@
 {
   "name": "@yeswanth08/parkinsons-internal",
-  "version": "2.0.0",
+  "version": "2.1.0",
   "description": "Parkinsons SDK",
   "main": "index.js",
   "types": "index.d.ts",

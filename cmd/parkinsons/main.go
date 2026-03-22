@@ -23,9 +23,19 @@ func main() {
 	e.Use(middleware.CORSWithConfig(middleware.CORSConfig{
 		AllowOrigins: []string{"http://localhost:3000"},
 		AllowMethods: []string{"GET", "POST", "OPTIONS"},
-		AllowHeaders: []string{"Content-Type", "Upgrade", "Connection"},
+		AllowHeaders: []string{
+			"Content-Type",
+			"Upgrade",
+			"Connection",
+			"Sec-WebSocket-Key",
+			"Sec-WebSocket-Version",
+			"Sec-WebSocket-Extensions",
+			"Sec-WebSocket-Protocol",
+		},
 	}))
 
+	// OpenAPI codegen: RegisterHandlers wires GET /api/v1/detect/ws → DetectWs
+	// and auto-binds DetectWsParams{Age, Sex} from query string
 	api.RegisterHandlers(e, handler)
 
 	log.Println("server listening on :8080")

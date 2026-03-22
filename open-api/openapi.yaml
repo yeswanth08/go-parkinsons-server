@@ -1,7 +1,7 @@
 openapi: 3.0.0
 info:
   title: Parkinsons-Risk-Screening-System
-  version: 2.0.0
+  version: 2.1.0
 
 paths:
   /api/v1/detect/ws:
@@ -31,7 +31,36 @@ paths:
                 $ref: '#/components/schemas/ParkinsonsResponse'
         '500':
           description: Internal error
-
+  /api/v1/detect/upload:
+    post:
+      operationId: DetectUpload
+      parameters:
+        - name: age
+          in: query
+          required: true
+          schema:
+            type: integer
+        - name: sex
+          in: query
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                audio:
+                  type: string
+                  format: binary
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ParkinsonsResponse'
 components:
   schemas:
     ParkinsonsResponse:
