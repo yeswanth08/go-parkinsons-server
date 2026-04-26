@@ -1,9 +1,17 @@
 {
   "name": "@yeswanth08/parkinsons-internal",
-  "version": "2.1.0",
+  "version": "2.1.2",
   "description": "Parkinsons SDK",
-  "main": "index.js",
-  "types": "index.d.ts",
+  "main": "index.ts",
+  "types": "index.ts",
+  "files": [
+    "**/*.ts",
+    "**/*.js",
+    "package.json"
+  ],
+  "exports": {
+    ".": "./index.ts"
+  },
   "repository": {
     "type": "git",
     "url": "https://github.com/yeswanth08/go-parkinsons-server.git"
