@@ -12,12 +12,13 @@ import (
 )
 
 func main() {
-    grpcAddr := os.Getenv("GRPC_ADDR")
-    if grpcAddr == "" {
-        grpcAddr = "localhost:50051"
-    }
+    // grpcAddr := os.Getenv("GRPC_ADDR")
+    // if grpcAddr == "" {
+    //     grpcAddr = "localhost:50051"
+    // }
 
-    handler, err := internalapi.NewRPCHandler(grpcAddr)
+    // handler, err := internalapi.NewRPCHandler(grpcAddr)
+    handler, err := internalapi.NewRPCHandler("localhost:50051")
     if err != nil {
         log.Fatalf("failed to connect to grpc: %v", err)
     }
